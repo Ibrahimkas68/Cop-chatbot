@@ -1,0 +1,62 @@
+# =========================================================
+# Java / Spring Boot standard ignore rules
+# =========================================================
+
+# Compiled class files
+*.class
+
+# Log files
+*.log
+
+# BlueJ files
+*.ctxt
+
+# Mobile Tools for Java (J2ME)
+.mtj.tmp/
+
+# Package Files #
+*.jar
+*.war
+*.nar
+*.ear
+*.zip
+*.tar.gz
+*.rar
+
+# Spring Boot build artifacts
+target/
+build/
+out/
+
+# Eclipse / IntelliJ IDEA
+.classpath
+.project
+.settings/
+.idea/
+*.iml
+
+# Mac / OS X
+.DS_Store
+
+# Gradle
+.gradle/
+build/
+!gradle/wrapper/gradle-wrapper.jar
+
+# Maven
+.mvn/wrapper/maven-wrapper.jar
+mvnw.cmd
+mvnw
+
+# Logs and temp files
+*.tmp
+*.bak
+*.swp
+
+# Test outputs
+test-output/
+surefire-reports/
+
+# Other local dev files
+.env
+*.local
