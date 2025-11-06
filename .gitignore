@@ -60,3 +60,4 @@ surefire-reports/
 # Other local dev files
 .env
 *.local
+.DS_Store
