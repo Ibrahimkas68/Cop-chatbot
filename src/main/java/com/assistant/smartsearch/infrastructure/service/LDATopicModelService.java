@@ -26,7 +26,6 @@ public class LDATopicModelService {
     private static final int NUM_ITERATIONS = 1000;
     private static final int NUM_THREADS = 4;
     private static final int TOP_WORDS_PER_TOPIC = 10;
-    private static final String MODEL_FILE_PATH = "data/lda_model.ser"; // Path to save/load the model
     
     private ParallelTopicModel model;
     private InstanceList instances;
@@ -37,45 +36,6 @@ public class LDATopicModelService {
     
     // Cache for document topic distributions
     private final Map<String, double[]> documentTopicCache = new ConcurrentHashMap<>();
-
-    public LDATopicModelService() {
-        loadModel(); // Attempt to load model on startup
-    }
-
-    private void saveModel() {
-        synchronized (modelLock) {
-            try (ObjectOutputStream oos = new ObjectOutputStream(new FileOutputStream(MODEL_FILE_PATH))) {
-                oos.writeObject(model);
-                oos.writeObject(instances);
-                oos.writeObject(alphabet);
-                log.info("LDA model saved to {}", MODEL_FILE_PATH);
-            } catch (IOException e) {
-                log.error("Error saving LDA model", e);
-            }
-        }
-    }
-
-    private void loadModel() {
-        synchronized (modelLock) {
-            File modelFile = new File(MODEL_FILE_PATH);
-            if (modelFile.exists()) {
-                try (ObjectInputStream ois = new ObjectInputStream(new FileInputStream(modelFile))) {
-                    model = (ParallelTopicModel) ois.readObject();
-                    instances = (InstanceList) ois.readObject();
-                    alphabet = (Alphabet) ois.readObject();
-                    inferencer = model.getInferencer();
-                    modelTrained = true;
-                    log.info("LDA model loaded from {}", MODEL_FILE_PATH);
-                    logTopics(); // Log topics after loading
-                } catch (IOException | ClassNotFoundException e) {
-                    log.error("Error loading LDA model", e);
-                    clearModel(); // Clear model if loading fails
-                }
-            } else {
-                log.info("No existing LDA model found at {}", MODEL_FILE_PATH);
-            }
-        }
-    }
     
     /**
      * Train the LDA model on a collection of documents
@@ -94,9 +54,21 @@ public class LDATopicModelService {
                 // Create a pipe for text preprocessing
                 Pipe pipe = createPipe();
                 
+                // Convert documents to instances
+                List<Instance> documentInstances = new ArrayList<>();
+                for (Map.Entry<String, String> entry : documents.entrySet()) {
+                    Instance instance = new Instance(
+                        entry.getValue(),
+                        null,
+                        entry.getKey(),
+                        null
+                    );
+                    documentInstances.add(instance);
+                }
+                
                 // Create instance list and process through pipe
                 instances = new InstanceList(pipe);
-                instances.addThruPipe(new ArrayIterator(new ArrayList<>(documents.values())));
+                instances.addThruPipe(new ArrayIterator(documentInstances));
                 
                 log.info("Created instance list with {} instances, vocabulary size: {}", 
                     instances.size(), instances.getDataAlphabet().size());
@@ -161,16 +133,6 @@ public class LDATopicModelService {
         }
     }
     
-    /**
-     * Calculate similarity between two topic distributions
-     * @param topicDistribution1 First topic distribution
-     * @param topicDistribution2 Second topic distribution
-     * @return Similarity score between 0 and 1
-     */
-    public double calculateTopicDistributionSimilarity(double[] topicDistribution1, double[] topicDistribution2) {
-        return calculateCosineSimilarity(topicDistribution1, topicDistribution2);
-    }
-
     /**
      * Calculate similarity between two documents based on their topic distributions
      * @param doc1Content First document content
@@ -345,16 +307,6 @@ public class LDATopicModelService {
             alphabet = null;
             modelTrained = false;
             documentTopicCache.clear();
-            
-            File modelFile = new File(MODEL_FILE_PATH);
-            if (modelFile.exists()) {
-                if (modelFile.delete()) {
-                    log.info("Persisted LDA model file deleted: {}", MODEL_FILE_PATH);
-                } else {
-                    log.warn("Failed to delete persisted LDA model file: {}", MODEL_FILE_PATH);
-                }
-            }
-            
             log.info("Model cleared");
         }
     }

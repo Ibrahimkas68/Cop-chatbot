@@ -1,6 +1,7 @@
 package com.assistant.smartsearch.infrastructure.service;
 
-import com.assistant.smartsearch.domain.port.SearchRepository;
+import com.assistant.smartsearch.domain.port.SearchUseCase;
+import com.assistant.smartsearch.domain.model.SearchRequest;
 import com.assistant.smartsearch.domain.model.SearchResult;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -20,14 +21,14 @@ import java.util.Map;
 public class DatabaseLDATrainingService {
     
     private final LDATopicModelService ldaService;
-    private final SearchRepository searchRepository;
+    private final SearchUseCase searchUseCase;
     
     @Autowired
     public DatabaseLDATrainingService(
             LDATopicModelService ldaService,
-            SearchRepository searchRepository) {
+            SearchUseCase searchUseCase) {
         this.ldaService = ldaService;
-        this.searchRepository = searchRepository;
+        this.searchUseCase = searchUseCase;
     }
     
     /**
@@ -72,8 +73,14 @@ public class DatabaseLDATrainingService {
         Map<String, String> documents = new HashMap<>();
         
         try {
-            // Fetch all documents using the new method
-            List<SearchResult> results = searchRepository.fetchAllDocuments(tableName, 10000);
+            // Create an empty search to get all documents
+            SearchRequest request = new SearchRequest();
+            request.setQuery("*");
+            request.setTableName(tableName);
+            request.setSize(10000); // Get all documents
+            
+            // Execute search to get all documents
+            List<SearchResult> results = searchUseCase.execute(request);
             
             for (SearchResult result : results) {
                 if (result.getId() != null) {

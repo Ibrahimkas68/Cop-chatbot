@@ -124,8 +124,14 @@ public class ScoringAdapter implements ScoringEngine {
 
     private String createUrl(String tableName, String slug) {
         if (slug == null || slug.isEmpty()) {
-            return "https://www.e-himaya.gov.ma/" + tableName;
+            if (tableName.equals("actualities")){
+                return "https://www.e-himaya.gov.ma/actualites";}
         }
+
+        if (tableName.equals("actualities")){
+            return "https://www.e-himaya.gov.ma/actualites/" + slug;
+        }
+
         return "https://www.e-himaya.gov.ma/" + tableName + "/" + slug;
     }
 

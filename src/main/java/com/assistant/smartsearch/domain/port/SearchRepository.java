@@ -8,5 +8,4 @@ import java.util.List;
 public interface SearchRepository {
     List<SearchResult> search(SearchRequest request);
     List<SearchResult> searchInTable(SearchRequest request, String tableName);
-    List<SearchResult> fetchAllDocuments(String tableName, int size);
 }
