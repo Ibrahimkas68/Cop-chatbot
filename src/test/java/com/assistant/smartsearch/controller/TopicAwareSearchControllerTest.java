@@ -3,6 +3,7 @@ package com.assistant.smartsearch.controller;
 import com.assistant.smartsearch.domain.model.SearchRequest;
 import com.assistant.smartsearch.domain.model.SearchResult;
 import com.assistant.smartsearch.application.TopicAwareSearchApplicationService;
+import jakarta.servlet.http.HttpServletRequest;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -64,7 +65,8 @@ class TopicAwareSearchControllerTest {
             .thenReturn(testResults);
 
         // Act
-        ResponseEntity<Map<String, Object>> response = topicAwareSearchController.search(testRequest);
+        HttpServletRequest mockRequest = mock(HttpServletRequest.class);
+        ResponseEntity<Map<String, Object>> response = topicAwareSearchController.search(testRequest,mockRequest);
 
         // Assert
         assertNotNull(response);
@@ -87,7 +89,8 @@ class TopicAwareSearchControllerTest {
     void search_WithNullRequest_ShouldReturnBadRequest() {
         // Act & Assert
         assertThrows(IllegalArgumentException.class, () -> {
-            topicAwareSearchController.search(null);
+            HttpServletRequest mockRequest = mock(HttpServletRequest.class);
+            topicAwareSearchController.search(null, mockRequest);
         });
     }
 
@@ -98,7 +101,8 @@ class TopicAwareSearchControllerTest {
             .thenReturn(List.of());
 
         // Act
-        ResponseEntity<Map<String, Object>> response = topicAwareSearchController.search(testRequest);
+        HttpServletRequest mockRequest = mock(HttpServletRequest.class);
+        ResponseEntity<Map<String, Object>> response = topicAwareSearchController.search(testRequest,mockRequest);
 
         // Assert
         assertNotNull(response);

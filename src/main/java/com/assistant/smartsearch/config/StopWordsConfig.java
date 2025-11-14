@@ -15,22 +15,6 @@ public class StopWordsConfig {
     /**
      * English stop words - common words that should be filtered out
      */
-    private static final Set<String> ENGLISH_STOP_WORDS = Set.of(
-            "the", "a", "an", "and", "or", "but", "in", "on", "at", "to", "for",
-            "of", "with", "by", "from", "as", "is", "was", "are", "were", "be", "been",
-            "have", "has", "had", "do", "does", "did", "will", "would", "should", "could",
-            "may", "might", "must", "can", "this", "that", "these", "those", "it", "its",
-            "i", "you", "he", "she", "we", "they", "my", "your", "his", "her", "our", "their",
-            "what", "which", "who", "when", "where", "why", "how", "about", "up", "out",
-            "if", "then", "than", "so", "no", "not", "only", "own", "same", "such", "here",
-            "there", "each", "few", "more", "most", "other", "some", "time", "very",
-            "said", "get", "make", "go", "see", "know", "take", "think", "come", "give",
-            "look", "use", "find", "tell", "ask", "work", "seem", "feel", "try", "leave"
-    );
-
-    /**
-     * French stop words - comprehensive list including articles, prepositions, pronouns, etc.
-     */
     private static final Set<String> FRENCH_STOP_WORDS = Set.of(
             // Articles
             "le", "la", "les", "un", "une", "des", "du", "de", "d", "l",
@@ -99,7 +83,6 @@ public class StopWordsConfig {
      */
     public Set<String> getAllStopWords() {
         return Set.of(
-                ENGLISH_STOP_WORDS,
                 FRENCH_STOP_WORDS,
                 ARABIC_STOP_WORDS
         ).stream()
@@ -107,18 +90,6 @@ public class StopWordsConfig {
                 .collect(java.util.stream.Collectors.toSet());
     }
 
-    /**
-     * Returns English stop words only
-     * @return Set of English stop words
-     */
-    public Set<String> getEnglishStopWords() {
-        return ENGLISH_STOP_WORDS;
-    }
-
-    /**
-     * Returns French stop words only
-     * @return Set of French stop words
-     */
     public Set<String> getFrenchStopWords() {
         return FRENCH_STOP_WORDS;
     }
@@ -139,11 +110,6 @@ public class StopWordsConfig {
         return IMPORTANT_SHORT_WORDS;
     }
 
-    /**
-     * Checks if a word is a stop word in any language
-     * @param word The word to check
-     * @return true if the word is a stop word, false otherwise
-     */
     public boolean isStopWord(String word) {
         if (word == null || word.trim().isEmpty()) {
             return true;

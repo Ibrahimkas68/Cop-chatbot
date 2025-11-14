@@ -5,11 +5,13 @@ import com.assistant.smartsearch.domain.model.SearchResult;
 import com.assistant.smartsearch.domain.model.SimplifiedSearchResult;
 import com.assistant.smartsearch.application.TopicAwareSearchApplicationService;
 import com.assistant.smartsearch.infrastructure.service.DatabaseLDATrainingService;
+import com.assistant.smartsearch.infrastructure.service.RateLimitService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -34,15 +36,15 @@ import java.util.stream.Collectors;
 @RequestMapping("/api")
 public class TopicAwareSearchController {
     private static final Logger log = LoggerFactory.getLogger(TopicAwareSearchController.class);
-
     private final TopicAwareSearchApplicationService topicAwareSearchApplicationService;
     private final DatabaseLDATrainingService databaseLDATrainingService;
-
+    private final RateLimitService rateLimitService;
     @Autowired
     public TopicAwareSearchController(
-            TopicAwareSearchApplicationService topicAwareSearchApplicationService,
+            TopicAwareSearchApplicationService topicAwareSearchApplicationService, RateLimitService rateLimitService,
             DatabaseLDATrainingService databaseLDATrainingService) {
         this.topicAwareSearchApplicationService = topicAwareSearchApplicationService;
+        this.rateLimitService = rateLimitService;
         this.databaseLDATrainingService = databaseLDATrainingService;
     }
 
@@ -70,38 +72,52 @@ public class TopicAwareSearchController {
     )
     @PostMapping("/chatbot")
     public ResponseEntity<Map<String, Object>> search(
-            @Valid @RequestBody(required = false) SearchRequest request) {
+            @Valid @RequestBody(required = false) SearchRequest request,
+            HttpServletRequest httpRequest) {
+
+        // Check rate limit first
+        if (!rateLimitService.allowRequest(httpRequest)) {
+            Map<String, Object> errorResponse = new HashMap<>();
+            errorResponse.put("error", "Too many requests");
+            errorResponse.put("message", "Rate limit exceeded. Please try again later.");
+            errorResponse.put("status", 429);
+
+            log.warn("Rate limit exceeded for IP: {}", httpRequest.getRemoteAddr());
+            return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS).body(errorResponse);
+        }
+
+        // Validate request
         if (request == null || request.getQuery() == null || request.getQuery().trim().isEmpty()) {
             throw new IllegalArgumentException("Search query cannot be empty");
         }
-        
+
         log.info("Received topic-aware search request for query: {}", request.getQuery());
-        
+
         try {
             long startTime = System.currentTimeMillis();
-            
+
             // Perform the search
             List<SearchResult> searchResults = topicAwareSearchApplicationService.topicAwareSearch(request);
-            
+
             // Convert to simplified results containing only the essential fields
             List<SimplifiedSearchResult> results = searchResults.stream()
                     .map(SimplifiedSearchResult::from)
                     .collect(Collectors.toList());
-            
+
             // Prepare response with metadata
             Map<String, Object> response = new HashMap<>();
             response.put("results", results);
             response.put("count", results.size());
             response.put("query", request.getQuery());
-            response.put("tablesSearched", request.getTableName() == null ? 
+            response.put("tablesSearched", request.getTableName() == null ?
                     "all" : request.getTableName());
             response.put("processingTimeMs", System.currentTimeMillis() - startTime);
-            
-            log.info("Search completed in {} ms with {} results", 
+
+            log.info("Search completed in {} ms with {} results",
                     response.get("processingTimeMs"), results.size());
-                    
+
             return ResponseEntity.ok(response);
-            
+
         } catch (Exception e) {
             log.error("Error processing search request: {}", request.getQuery(), e);
             throw e; // Global exception handler will handle this

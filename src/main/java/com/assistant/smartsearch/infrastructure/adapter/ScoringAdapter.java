@@ -132,6 +132,9 @@ public class ScoringAdapter implements ScoringEngine {
             return "https://www.e-himaya.gov.ma/actualites/" + slug;
         }
 
+        if (tableName.equals("articles")){
+            return "https://www.e-himaya.gov.ma/articles/slug/" + slug;
+        }
         return "https://www.e-himaya.gov.ma/" + tableName + "/" + slug;
     }
 

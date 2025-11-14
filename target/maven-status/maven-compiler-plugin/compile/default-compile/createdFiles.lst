@@ -1,9 +1,11 @@
 com/assistant/smartsearch/config/StopWordsConfig.class
 com/assistant/smartsearch/domain/port/SemanticSimilarityPort.class
 com/assistant/smartsearch/infrastructure/adapter/MongoLogAdapter.class
+com/assistant/smartsearch/application/DDoSProtectionFilter.class
 com/assistant/smartsearch/infrastructure/adapter/KeywordExtractorAdapter.class
 com/assistant/smartsearch/domain/model/SearchLog.class
 com/assistant/smartsearch/domain/model/DocumentContent.class
+com/assistant/smartsearch/config/RedisRateLimitConfig.class
 com/assistant/smartsearch/domain/port/LogRepository.class
 com/assistant/smartsearch/domain/model/SearchRequest.class
 com/assistant/smartsearch/repository/SearchLogRepository.class
@@ -19,12 +21,14 @@ com/assistant/smartsearch/domain/port/SearchUseCase.class
 com/assistant/smartsearch/application/DocumentProcessorService.class
 com/assistant/smartsearch/controller/TopicAwareSearchController.class
 com/assistant/smartsearch/domain/model/UserInteraction.class
+com/assistant/smartsearch/infrastructure/service/RateLimitService.class
 com/assistant/smartsearch/domain/model/SimplifiedSearchResult.class
 com/assistant/smartsearch/domain/port/ScoringEngine.class
 com/assistant/smartsearch/domain/model/SearchResultLog.class
 com/assistant/smartsearch/domain/model/SearchResult.class
 com/assistant/smartsearch/domain/model/Performance.class
 com/assistant/smartsearch/domain/port/SearchRepository.class
+com/assistant/smartsearch/config/SecurityConfig.class
 com/assistant/smartsearch/infrastructure/service/LDATopicModelService.class
 com/assistant/smartsearch/infrastructure/service/DatabaseLDATrainingService.class
 com/assistant/smartsearch/domain/model/SearchContext.class

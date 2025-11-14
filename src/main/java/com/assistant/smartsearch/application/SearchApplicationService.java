@@ -53,7 +53,7 @@ public class SearchApplicationService implements SearchUseCase {
         List<SearchResult> allResults = new ArrayList<>();
         
         // Define all tables to search in
-        String[] tablesToSearch = {"actualities", "initiatives", "glossary"};
+        String[] tablesToSearch = {"actualities", "initiatives","articles","advices","guides"};
         System.out.println("Searching across tables: " + Arrays.toString(tablesToSearch));
         
         // Store original size and page to restore them later
@@ -99,9 +99,6 @@ public class SearchApplicationService implements SearchUseCase {
         return allResults;
     }
 
-    /**
-     * Logs the search operation for analytics and debugging.
-     */
     private void logSearch(SearchRequest request, List<String> keywords, 
                           List<SearchResult> scoredResults, int totalResults, long searchTimeMs) {
         try {
