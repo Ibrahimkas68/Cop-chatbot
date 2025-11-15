@@ -1,236 +1,131 @@
 # Smart Search Service
 
-A generic smart search service that provides a flexible and powerful search experience across your database tables, now refactored with a Clean Architecture approach.
+## Project Overview
 
-## About The Project
+The Smart Search Service is a Spring Boot application designed to provide an intelligent and robust search experience. It leverages advanced natural language processing (NLP) capabilities, including topic modeling and semantic similarity, to understand user queries and deliver highly relevant results. Additionally, the service incorporates a distributed rate-limiting and IP blacklisting mechanism using Redis to ensure stability, prevent abuse, and protect against traffic spikes.
 
-This project provides a "smart" search API that can be configured to search across different tables and fields. It includes features like keyword extraction, semantic query expansion, result scoring, and search logging. The architecture has been refactored to adhere to Clean Architecture principles, promoting separation of concerns, testability, and maintainability.
+## Features
 
-### Built With
+*   **Topic-Aware Semantic Search**: Understands the meaning and context of user queries beyond simple keyword matching.
+*   **Distributed Rate Limiting**: Protects the service from excessive requests using a Redis-backed token bucket algorithm.
+*   **IP Blacklisting**: Defends against DDoS attacks and aggressive scanning by temporarily blocking malicious IP addresses.
+*   **Scalable Architecture**: Built with Spring Boot, allowing for easy deployment and scaling.
+*   **Configurable**: Rate limiting, blacklisting, and search parameters can be easily configured via `application.properties`.
+*   **Comprehensive Logging**: Provides detailed logs for monitoring and troubleshooting.
 
-*   [Spring Boot](https://spring.io/projects/spring-boot)
-*   [Maven](https://maven.apache.org/)
-*   [PostgreSQL](https://www.postgresql.org/)
-*   [MongoDB](https://www.mongodb.com/)
-*   [Docker](https://www.docker.com/)
+## Architecture Overview
+
+The semantic search functionality is integrated into the existing search pipeline, enhancing it with advanced NLP capabilities.
+
+```mermaid
+graph TD
+    A[User Query] --> B{SmartSearchController};
+    B --> C[TopicAwareSearchApplicationService];
+    C --> D[SearchUseCase];
+    D --> E[SemanticSimilarityPort];
+    E --> F[SemanticSimilarityAdapter];
+    F --> G[External Semantic Search Service/Model];
+    G --> H[Search Repository];
+    H --> I[Database];
+    I --> H;
+    H --> F;
+    F --> E;
+    E --> D;
+    D --> C;
+    C --> B;
+    B --> J[Search Results];
+```
+
+## Rate Limiting and Blacklisting with Redis
+
+The system employs a two-layered protection mechanism against traffic spikes and malicious behavior, both managed by Redis:
+
+1.  **Token Bucket Rate Limiting**: Each client IP address is assigned a "bucket" of tokens that refills at a set interval. Every request consumes a token, and if the bucket is empty, the server responds with a `429 Too Many Requests` error.
+2.  **IP Blacklisting**: A rolling counter tracks requests from each IP. If an IP exceeds a predefined threshold within a time window, it is temporarily blacklisted, and all subsequent requests are blocked with a `403 Forbidden` error.
+
+All enforcement is handled by the `DDoSProtectionFilter`.
+
+## Semantic Search Implementation
+
+The semantic search functionality aims to provide a search experience that understands the meaning and context of user queries. Key components include:
+
+*   **`TopicAwareSearchApplicationService`**: Orchestrates the semantic search process, analyzing queries for topics and interacting with semantic similarity providers.
+*   **`SemanticSimilarityPort`**: An abstraction layer for semantic similarity providers, allowing flexible integration of different implementations.
+*   **`SemanticSimilarityAdapter`**: Concrete implementation of the `SemanticSimilarityPort`, connecting to external services or local models for embedding generation and similarity comparisons.
+*   **`SearchRepository`**: Interacts with the underlying data store, potentially handling vector-based queries or filtering based on semantic relevance scores.
+*   **`SearchRequest` and `SearchResult`**: DTOs defining the structure of search queries and results.
 
 ## Getting Started
 
-To get a local copy up and running, follow these simple steps.
+To get the Smart Search Service up and running, follow these steps:
 
 ### Prerequisites
 
-*   Java 17
-*   Docker
+*   Java 17 or higher
+*   Maven
+*   Docker (for running Redis, PostgreSQL, and MongoDB)
 
-### Installation
+### Setup
 
-1.  Clone the repo
-    ```sh
-    git clone <your-repository-url>
+1.  **Clone the repository**:
+    ```bash
+    git clone https://github.com/your-repo/smart-search-service.git
+    cd smart-search-service
     ```
-2.  Build the project and Docker image
-    ```sh
-    ./mvnw clean install
+2.  **Start Docker Compose services**:
+    Ensure you have Docker installed and running. The project relies on Redis, PostgreSQL, and MongoDB.
+    ```bash
+    docker-compose up -d
     ```
-3.  Start the services
-    ```sh
-    docker-compose up -d --build
+3.  **Build the application**:
+    ```bash
+    mvn clean install
     ```
-
-## Usage
-
-The API provides endpoints for performing smart searches.
-
-### Endpoints
-
-1.  **Smart Search (Single Table or All Tables)**
-    `POST /api/smart-search`
-
-    *   **Description**: Performs a smart search. If `tableName` is specified, it searches within that table. Otherwise, it searches across all configured tables.
-    *   **Request Body**: 
-        ```json
-        {
-          "query": "your search query",
-          "tableName": "your_table_name", // Optional: if omitted, searches all tables
-          "searchFields": ["field1", "field2"], // Optional: if omitted, auto-detects searchable fields
-          "size": 20 // Optional: number of results to return (default 20)
-        }
-        ```
-    *   **Example**: 
-        ```bash
-        curl -X POST http://localhost:8080/api/smart-search \
-        -H "Content-Type: application/json" \
-        -d '{
-          "query": "example search",
-          "tableName": "products",
-          "searchFields": ["name", "description"],
-          "size": 10
-        }'
-        ```
-
-2.  **Topic-Aware Search (Semantic Search)**
-    `POST /api/topics/search`
-
-    *   **Description**: Performs a topic-aware semantic search. The query is expanded with semantically related terms before the search is executed across all configured tables. This endpoint now returns the top 3 scored objects from each table.
-    *   **Request Body**: 
-        ```json
-        {
-          "query": "your semantic search query",
-          "searchFields": [], // Optional: if omitted, auto-detects searchable fields
-          "size": 3 // Optional: number of results to return per table (default 3)
-        }
-        ```
-    *   **Example**: 
-        ```bash
-        curl -X POST http://localhost:8080/api/topics/search \
-        -H "Content-Type: application/json" \
-        -d '{
-          "query": "comment sensibiliser mes enfants contre le chantage ",
-          "searchFields": []
-        }'
-        ```
-
-### Response Body
-
-The API returns a JSON object containing search results and metadata.
-
-```json
-{
-  "processingTimeMs": 123,
-  "query": "your search query",
-  "tablesSearched": "all" | "your_table_name",
-  "count": 5, // Total number of results returned in this response
-  "results": [
-    {
-      "id": "unique_id",
-      "originalId": 123,
-      "query": "original query",
-      "tableName": "table_name",
-      "data": {
-        "field1": "value1",
-        "field2": "value2"
-      },
-      "score": 0.85,
-      "matchedKeywords": ["keyword1", "keyword2"],
-      "highlightedText": "Optional highlighted text",
-      "totalResults": 100, // Total results found before pagination
-      "pageNumber": 0,
-      "pageSize": 20,
-      "title": "Document Title",
-      "url": "https://www.e-himaya.gov.ma/{tableName}/{slug}",
-      "imageName": "{imageName}",
-      "description": "Short description of the content",
-      "metadata": {}
-    }
-  ]
-}
-```
-
-### Error Handling
-
-In case of an error, the API will return a standard Spring Boot error response.
-
-## Architecture (Clean Architecture)
-
-The application is designed following Clean Architecture principles, separating concerns into distinct layers:
-
-*   **Domain Layer (`com.assistant.smartsearch.domain`)**:
-    *   **Models (`.model`)**: Contains Plain Old Java Objects (POJOs) representing the core business entities and data structures (e.g., `SearchRequest`, `SearchResult`, `SearchLog`, `Performance`). These are independent of any framework or database.
-    *   **Ports (`.port`)**: Defines interfaces (ports) that represent the application's business rules and interactions with external systems. These are contracts that the Application layer depends on, and the Infrastructure layer implements.
-        *   `SearchUseCase`: Defines the core search operation.
-        *   `SearchRepository`: Abstraction for data retrieval from various sources (e.g., PostgreSQL tables).
-        *   `LogRepository`: Abstraction for logging search events.
-        *   `KeywordExtractor`: Abstraction for extracting keywords from text.
-        *   `ScoringEngine`: Abstraction for scoring search results.
-        *   `SemanticSimilarityPort`: Abstraction for semantic query expansion.
-
-*   **Application Layer (`com.assistant.smartsearch.application`)**:
-    *   Contains the application-specific business rules and orchestrates the flow of data. It depends only on the Domain layer.
-    *   `SearchApplicationService`: Implements `SearchUseCase`, coordinating the search process using `KeywordExtractor`, `SearchRepository`, `ScoringEngine`, and `LogRepository`.
-    *   `TopicAwareSearchApplicationService`: Handles semantic query expansion using `SemanticSimilarityPort` and then delegates to `SearchUseCase`.
-    *   `DocumentProcessorService`: Processes documents for keyword extraction and vectorization.
-
-*   **Infrastructure Layer (`com.assistant.smartsearch.infrastructure`)**:
-    *   Contains the implementations of the ports defined in the Domain layer. This layer deals with external concerns like databases, frameworks, and external APIs. It depends on the Application and Domain layers.
-    *   **Adapters (`.adapter`)**: Implementations of the Domain ports.
-        *   `PostgresSearchAdapter`: Implements `SearchRepository`, handling PostgreSQL database interactions using `JdbcTemplate`.
-        *   `MongoLogAdapter`: Implements `LogRepository`, interacting with MongoDB via `SearchLogRepository`.
-        *   `KeywordExtractorAdapter`: Implements `KeywordExtractor`, providing keyword extraction logic.
-        *   `ScoringAdapter`: Implements `ScoringEngine`, providing result scoring logic.
-        *   `SemanticSimilarityAdapter`: Implements `SemanticSimilarityPort`, providing semantic query expansion logic.
-    *   **Repositories (`.repository`)**: Spring Data repositories (e.g., `SearchLogRepository` for MongoDB).
-
-*   **Controller Layer (`com.assistant.smartsearch.controller`)**:
-    *   Exposes the API endpoints. It depends on the Application layer (Use Cases).
-    *   `SmartSearchController`: Exposes the `/api/smart-search` endpoint, delegating to `SearchApplicationService`.
-    *   `TopicAwareSearchController`: Exposes the `/api/topics/search` endpoint, delegating to `TopicAwareSearchApplicationService`.
+4.  **Run the application**:
+    ```bash
+    java -jar target/smart-search-service-0.0.1-SNAPSHOT.jar
+    ```
+    The application will start on `http://localhost:8083`.
 
 ## Configuration
 
-The application can be configured through the `application.properties` file or by setting environment variables.
+The application's behavior can be configured via `src/main/resources/application.properties`.
 
-### Database
+### Rate Limiting and Blacklisting
 
-*   `SPRING_DATASOURCE_URL`: The JDBC URL of your PostgreSQL database.
-*   `SPRING_DATASOURCE_USERNAME`: The username for your PostgreSQL database.
-*   `SPRING_DATASOURCE_PASSWORD`: The password for your PostgreSQL database.
+*   `rate.limit.capacity=15`: Max requests per minute.
+*   `rate.limit.refillRate=15`: Tokens added back per minute.
+*   `rate.limit.refillIntervalSeconds=60`: Refill interval in seconds.
+*   `rate.limit.blacklist.threshold=100`: Requests before blacklisting.
+*   `rate.limit.counter.windowSeconds=60`: Time window for request counter.
+*   `rate.limit.blacklist.ttlSeconds=300`: Blacklist duration in seconds.
 
-### Logging
+### Redis Connection
 
-*   `SPRING_DATA_MONGODB_URI`: The connection string for your MongoDB database.
+*   `spring.data.redis.host=cop-redis`: Redis hostname.
+*   `spring.data.redis.port=6379`: Redis port.
 
-## Logging
+For local development, you can override Redis host and port using environment variables:
+`export SPRING_REDIS_HOST=localhost`
+`export SPRING_REDIS_PORT=6379`
 
-The service logs detailed information about each search to a MongoDB collection named `search_logs`. This data can be used for:
+## Local Verification
 
-*   **Analytics:** Understanding what users are searching for.
-*   **Monitoring:** Tracking the performance of the search service.
-*   **Improving Search Relevance:** Analyzing search patterns to fine-tune the scoring algorithm.
+A test script is provided to verify the rate limiter's behavior:
 
-Each search log document contains:
+1.  **Make the script executable**:
+    ```bash
+    chmod +x ./test_semantic_search.sh
+    ```
+2.  **Run the script**:
+    ```bash
+    ./test_semantic_search.sh
+    ```
+    The script will test the rate limiting and blacklisting by sending multiple requests and checking the HTTP response codes (200, 429, 403).
 
-*   The original query.
-*   The extracted keywords.
-*   The ranked list of results.
-*   Performance metrics (e.g., search time).
+## Future Enhancements
 
-## Extensibility
-
-The service is designed to be highly extensible due to its Clean Architecture:
-
-*   **Keyword Extraction:** Easily swap `KeywordExtractorAdapter` with a different implementation (e.g., using a more advanced NLP library) by implementing the `KeywordExtractor` interface.
-*   **Scoring:** Customize the `ScoringAdapter` to implement your own scoring algorithm by implementing the `ScoringEngine` interface.
-*   **Data Sources:** Adapt to different data sources (e.g., Elasticsearch, other SQL databases) by creating new implementations of the `SearchRepository` interface.
-*   **Logging:** Change logging mechanisms (e.g., to a different NoSQL database or a log aggregation service) by implementing the `LogRepository` interface.
-*   **Semantic Similarity:** Replace or enhance the `SemanticSimilarityAdapter` by implementing the `SemanticSimilarityPort` interface.
-
-## Testing
-
-To run the tests for this project, you can use the following Maven command:
-
-```sh
-./mvnw test
-```
-
-## Code Style
-
-This project follows the standard Java code style.
-
-## Security
-
-This service is intended to be used as a backend service and does not include any authentication or authorization mechanisms out of the box. It is recommended to deploy it behind an API gateway or other security layer that can handle these concerns.
-
-## Deployment
-
-The application is containerized using Docker and can be deployed using the provided `docker-compose.yaml` file. This will start the application, a MongoDB database, and a PostgreSQL database.
-
-Before deploying, make sure to configure the database connections in the `docker-compose.yaml` file.
-
-## Versioning
-
-We use [SemVer](http://semver.org/) for versioning.
-
-## License
-
-Copyright (c) 2025 ZenithSoft
+*   **Advanced Topic Modeling**: Integrate more sophisticated topic modeling techniques.
+*   **Personalized Search**: Incorporate user history and preferences for personalized results.
+*   **Multi-language Support**: Extend semantic search to multiple languages.
+*   **Real-time Indexing**: Implement real-time indexing for up-to-date search results.

@@ -25,6 +25,7 @@
 
 # Spring Boot build artifacts
 target/
+*.jar
 build/
 out/
 

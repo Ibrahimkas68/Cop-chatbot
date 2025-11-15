@@ -77,11 +77,11 @@ A test script is included in the repository to verify the rate limiter's behavio
 
 1.  Make the script executable:
     ```sh
-    chmod +x ./test_semantic_search.sh
+    chmod +x ./test_redis_rate_limiting.sh
     ```
 2.  Run the script:
     ```sh
-    ./test_semantic_search.sh
+    ./test_redis_rate_limiting.sh
     ```
 
 The script will:
