@@ -90,6 +90,11 @@ public class SearchResult {
      * A short description of the content
      */
     private String description;
+
+    /**
+     * A tag representing the type/category of the result (e.g., actualites, GUIDES.PARENTS, ADVICES.TEACHERS)
+     */
+    private String tag;
     
     /**
      * Additional metadata about the search result

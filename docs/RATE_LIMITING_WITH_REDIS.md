@@ -1,33 +1,17 @@
-# Rate Limiting with Redis in Smart Search Service
+# Rate Limiting and Blacklisting with Redis
+
+This guide provides a simple explanation of the rate limiting and IP blacklisting features in this service.
 
 ## 1. Overview
 
-This document outlines the implementation of a robust, distributed rate-limiting mechanism using **Redis** and **Spring Boot** in the Smart Search Service. The goal is to protect the service from excessive requests, prevent abuse, and ensure high availability for all users.
+The system uses two layers of protection to guard against traffic spikes and malicious behavior, both of which are managed by Redis:
 
-The rate-limiting strategy is based on the **token bucket algorithm**, which is a flexible and effective way to handle traffic bursts while maintaining a fair usage policy.
+1.  **Token Bucket Rate Limiting**: Each client IP address is given a "bucket" of tokens that refills at a set interval. Every request consumes a token. If the bucket is empty, the server rejects the request with a `429 Too Many Requests` error. This prevents a single user from overwhelming the service.
+2.  **IP Blacklisting**: A rolling counter tracks the total number of requests from each IP. If an IP exceeds a certain threshold within a time window, it is temporarily blacklisted, and all subsequent requests are blocked with a `403 Forbidden` error. This is designed to stop DDoS attacks or aggressive scanners.
 
-## 2. Core Components
+All enforcement happens in a single place: `DDoSProtectionFilter`.
 
-The rate-limiting implementation consists of the following components:
-
-- **`RateLimitService`**: A service responsible for checking if a request is allowed based on the client's IP address.
-- **`DDoSProtectionFilter`**: A servlet filter that intercepts incoming requests and uses the `RateLimitService` to enforce rate limits.
-- **`RedisRateLimitConfig`**: A configuration class that sets up the necessary Redis beans.
-- **`application.properties`**: The configuration file where rate-limiting parameters are defined.
-
-## 3. How It Works
-
-The rate-limiting process works as follows:
-
-1.  **Request Interception**: The `DDoSProtectionFilter` intercepts every incoming HTTP request.
-2.  **Client Identification**: The client's IP address is extracted from the request. This IP address is used as a unique key for rate limiting.
-3.  **Rate Limit Check**: For each request, the `RateLimitService` communicates with Redis to check if the client has exceeded their allowed request limit.
-4.  **Token Bucket Algorithm**: The service uses a Redis-backed implementation of the token bucket algorithm. Each client (IP address) has a "bucket" of tokens that refills at a constant rate. Each request consumes one token.
-5.  **Request Handling**:
-    - If the client's bucket has enough tokens, the request is allowed to proceed to the controller.
-    - If the bucket is empty, the request is rejected with an **HTTP 429 (Too Many Requests)** status code.
-
-### Visual Workflow
+## 2. How It Works
 
 ```mermaid
 sequenceDiagram
@@ -35,110 +19,72 @@ sequenceDiagram
     participant DDoSProtectionFilter
     participant RateLimitService
     participant Redis
-    participant SmartSearchController
 
     Client->>DDoSProtectionFilter: Sends HTTP Request
-    DDoSProtectionFilter->>RateLimitService: Checks if request is allowed for Client's IP
-    RateLimitService->>Redis: Gets current token count for IP
-    alt Tokens available
-        Redis-->>RateLimitService: Returns token count
-        RateLimitService-->>DDoSProtectionFilter: Request allowed
-        DDoSProtectionFilter->>SmartSearchController: Forwards request
-        SmartSearchController-->>Client: Returns response
-    else Tokens unavailable
-        Redis-->>RateLimitService: No tokens left
-        RateLimitService-->>DDoSProtectionFilter: Request denied
-        DDoSProtectionFilter-->>Client: Returns HTTP 429 (Too Many Requests)
+    DDoSProtectionFilter->>RateLimitService: 1. Record request & check for blacklist
+    RateLimitService->>Redis: Increment IP counter
+    alt IP exceeds blacklist threshold
+        RateLimitService->>Redis: Add IP to blacklist
+        RateLimitService-->>DDoSProtectionFilter: Client is blacklisted
+        DDoSProtectionFilter-->>Client: Return HTTP 403 (Forbidden)
+    else IP is not blacklisted
+        RateLimitService-->>DDoSProtectionFilter: Client is not blacklisted
+        DDoSProtectionFilter->>RateLimitService: 2. Consume a token
+        RateLimitService->>Redis: Execute Lua script for token bucket
+        alt Token available
+            Redis-->>RateLimitService: Token consumed
+            RateLimitService-->>DDoSProtectionFilter: Request permitted
+            DDoSProtectionFilter->>Controller: Forward request
+        else No tokens available
+            Redis-->>RateLimitService: Bucket is empty
+            RateLimitService-->>DDoSProtectionFilter: Request denied
+            DDoSProtectionFilter-->>Client: Return HTTP 429 (Too Many Requests)
+        end
     end
 ```
 
-## 4. Implementation Details
+## 3. Configuration
 
-### 4.1. `RateLimitService`
+You can configure the rate limiter and blacklist settings in `src/main/resources/application.properties`.
 
-The `RateLimitService` uses a Lua script to perform an atomic check-and-decrement operation in Redis. This ensures that the rate-limiting logic is race-condition-free.
+### Token Bucket (Rate Limiting)
 
-Here is a simplified version of the `allowRequest` method:
+-   `rate.limit.capacity=15`: The maximum number of requests allowed per minute.
+-   `rate.limit.refillRate=15`: The number of tokens added back to the bucket every minute.
+-   `rate.limit.refillIntervalSeconds=60`: The interval for refilling tokens (60 seconds = 1 minute).
 
-```java
-@Service
-public class RateLimitService {
+### Blacklist (DDoS Protection)
 
-    private final RedisTemplate<String, String> redisTemplate;
-    private final DefaultRedisScript<Long> redisScript;
+-   `rate.limit.blacklist.threshold=100`: The total number of requests an IP can make in the time window before being blacklisted.
+-   `rate.limit.counter.windowSeconds=60`: The time window (in seconds) for the request counter.
+-   `rate.limit.blacklist.ttlSeconds=300`: How long an IP remains blacklisted (in seconds).
 
-    // ... constructor ...
+### Redis Connection
 
-    public boolean allowRequest(String ipAddress) {
-        Long tokens = redisTemplate.execute(
-            redisScript,
-            Collections.singletonList(ipAddress),
-            "100", // Bucket capacity
-            "100", // Refill rate
-            "60"   // Refill interval in seconds
-        );
+-   `spring.data.redis.host=cop-redis`: The Redis hostname.
+-   `spring.data.redis.port=6379`: The Redis port.
 
-        return tokens != null && tokens > 0;
-    }
-}
+For local development, you can override the Redis host and port using environment variables:
+
+```sh
+export SPRING_REDIS_HOST=localhost
+export SPRING_REDIS_PORT=6379
 ```
 
-### 4.2. Lua Script for Atomicity
+## 4. Local Verification
 
-The Lua script is essential for ensuring that the token bucket logic is atomic. It performs the following actions in a single Redis command:
+A test script is included in the repository to verify the rate limiter's behavior.
 
-1.  Gets the current number of tokens in the bucket.
-2.  Calculates how many new tokens should be added since the last request.
-3.  Updates the token count.
-4.  If there are enough tokens, it decrements the count and returns `1`. Otherwise, it returns `0`.
+1.  Make the script executable:
+    ```sh
+    chmod +x ./test_semantic_search.sh
+    ```
+2.  Run the script:
+    ```sh
+    ./test_semantic_search.sh
+    ```
 
-### 4.3. `DDoSProtectionFilter`
-
-The `DDoSProtectionFilter` is a standard Spring `OncePerRequestFilter`. It extracts the client's IP and calls the `RateLimitService`.
-
-```java
-@Component
-public class DDoSProtectionFilter extends OncePerRequestFilter {
-
-    private final RateLimitService rateLimitService;
-
-    // ... constructor ...
-
-    @Override
-    protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
-            throws ServletException, IOException {
-        String clientIP = getClientIP(request);
-
-        if (!rateLimitService.allowRequest(clientIP)) {
-            response.setStatus(HttpServletResponse.SC_TOO_MANY_REQUESTS);
-            response.getWriter().write("Too many requests");
-            return;
-        }
-
-        filterChain.doFilter(request, response);
-    }
-
-    // ... getClientIP method ...
-}
-```
-
-## 5. Configuration
-
-The rate-limiting parameters can be configured in the `application.properties` file:
-
-```properties
-# Rate Limiting Configuration
-rate.limit.capacity=100
-rate.limit.refillRate=100
-rate.limit.refillIntervalSeconds=60
-```
-
-- **`rate.limit.capacity`**: The maximum number of requests allowed in a time window (bucket size).
-- **`rate.limit.refillRate`**: The number of tokens added to the bucket at each refill.
-- **`rate.limit.refillIntervalSeconds`**: The interval (in seconds) at which the bucket is refilled.
-
-## 6. Disabling the Old `DDoSProtectionFilter`
-
-The old in-memory `DDoSProtectionFilter` is not suitable for a distributed environment and should be disabled. This can be done by removing the `@Component` annotation from the class.
-
-The new implementation provides a more scalable and robust solution for protecting the Smart Search Service.
+The script will:
+-   Send 15 requests that should succeed (`200 OK`).
+-   Send subsequent requests that should be rate-limited (`429 Too Many Requests`).
+-   Send enough traffic to trigger the blacklist and confirm a `403 Forbidden` response.

@@ -19,7 +19,8 @@ public class SimplifiedSearchResult {
     
     @JsonProperty("url")
     private String url;
-    
+    @JsonProperty("tag")
+    private String tag;
     @JsonProperty("imageName")
     private String imageName;
     
@@ -39,6 +40,7 @@ public class SimplifiedSearchResult {
         return new SimplifiedSearchResult(
             searchResult.getTitle(),
             searchResult.getUrl(),
+            searchResult.getTag().toUpperCase(),
             searchResult.getImageName(),
             searchResult.getDescription(),
             searchResult.getScore()

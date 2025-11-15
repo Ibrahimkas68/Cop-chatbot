@@ -41,9 +41,14 @@ public class ScoringAdapter implements ScoringEngine {
             // Populate title, url, imageName, and description based on detected language
             String title = getTitle(row, detectedLanguage);
             result.setTitle(title);
-            result.setUrl(createUrl(tableName, (String) row.get("slug")));
+            // Build URL possibly based on profile/advice_profile for specific tables
+            result.setUrl(createUrl(tableName, (String) row.get("slug"), row));
             result.setImageName((String) row.get("image_name"));
             result.setDescription(getDescription(row, detectedLanguage));
+
+            // Compute tag based on table and profile fields
+            String tag = buildTag(tableName, row);
+            result.setTag(tag);
 
             // Strict language-only response: skip entries without content in detected language
             if ("No Title".equals(result.getTitle()) && "No description available".equals(result.getDescription())) {
@@ -123,19 +128,103 @@ public class ScoringAdapter implements ScoringEngine {
     }
 
     private String createUrl(String tableName, String slug) {
+        // Backward-compatible default behavior for non-profile-based URLs
         if (slug == null || slug.isEmpty()) {
-            if (tableName.equals("actualities")){
-                return "https://www.e-himaya.gov.ma/actualites";}
+            if ("actualities".equals(tableName)) {
+                return "https://www.e-himaya.gov.ma/actualites";
+            }
         }
 
-        if (tableName.equals("actualities")){
+        if ("actualities".equals(tableName)) {
             return "https://www.e-himaya.gov.ma/actualites/" + slug;
         }
 
-        if (tableName.equals("articles")){
+        if ("articles".equals(tableName)) {
             return "https://www.e-himaya.gov.ma/articles/slug/" + slug;
         }
         return "https://www.e-himaya.gov.ma/" + tableName + "/" + slug;
+    }
+
+    private String createUrl(String tableName, String slug, Map<String, Object> row) {
+        // Profile-based URLs for guides and advices
+        if ("guides".equalsIgnoreCase(tableName) || "advices".equalsIgnoreCase(tableName)) {
+            String rawProfile = null;
+            if ("guides".equalsIgnoreCase(tableName)) {
+                // Try common column names for guides
+                rawProfile = getString(row, "profile");
+                if (rawProfile == null) rawProfile = getString(row, "profiles");
+            } else {
+                // advices
+                rawProfile = getString(row, "advice_profile");
+                if (rawProfile == null) rawProfile = getString(row, "profile");
+            }
+
+            String profile = normalizeProfile(rawProfile);
+            String base = profileHome(profile);
+            if (base != null) {
+                return base; // As requested: return the home URL for the profile
+            }
+            // Fallback to non-profile URL rules if profile not recognized
+            return createUrl(tableName, slug);
+        }
+
+        // Default behavior for other tables
+        return createUrl(tableName, slug);
+    }
+
+    private String buildTag(String tableName, Map<String, Object> row) {
+        if ("actualities".equalsIgnoreCase(tableName)) {
+            return "actualites";
+        }
+        if ("guides".equalsIgnoreCase(tableName)) {
+            String profile = normalizeProfile(getString(row, "profile"));
+            if (profile == null) profile = normalizeProfile(getString(row, "profiles"));
+            if (profile != null) {
+                return "GUIDES." + profile;
+            }
+            return "GUIDES";
+        }
+        if ("advices".equalsIgnoreCase(tableName)) {
+            String profile = normalizeProfile(getString(row, "advice_profile"));
+            if (profile == null) profile = normalizeProfile(getString(row, "profile"));
+            if (profile != null) {
+                return "ADVICES." + profile;
+            }
+            return "ADVICES";
+        }
+        return tableName;
+    }
+
+    private String getString(Map<String, Object> row, String key) {
+        if (row == null || key == null) return null;
+        Object val = row.get(key);
+        if (val == null) return null;
+        String s = String.valueOf(val).trim();
+        return s.isEmpty() ? null : s;
+    }
+
+    private String normalizeProfile(String raw) {
+        if (raw == null) return null;
+        String up = raw.trim().toUpperCase();
+        // Handle possible variants
+        if (up.startsWith("PARENT")) return "PARENTS";
+        if (up.startsWith("TEACHER") || up.contains("ENSEIGNANT")) return "TEACHERS";
+        if (up.startsWith("YOUTH") || up.contains("JEUNE")) return "YOUTH";
+        return up; // unknown but keep uppercase
+    }
+
+    private String profileHome(String profile) {
+        if (profile == null) return null;
+        switch (profile) {
+            case "PARENTS":
+                return "https://www.e-himaya.gov.ma/parents/home";
+            case "TEACHERS":
+                return "https://www.e-himaya.gov.ma/enseignants/home";
+            case "YOUTH":
+                return "https://www.e-himaya.gov.ma/jeunes/home";
+            default:
+                return null;
+        }
     }
 
 
